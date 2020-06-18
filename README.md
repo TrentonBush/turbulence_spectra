@@ -1,7 +1,7 @@
 turbulence_spectra
 ==============================
 
-Wind Resource Assessment typically treats turbulence as constant over time. This analysis seeks to understand how valid that assumption is by examining variation of wind power spectra over time. I hypothesized that power spectra changed similarly to wind shear, with strong seasonal/diurnal variation. The data source is 20hz sonic anemometer data from the National Renewable Energy Lab (NREL) National Wind Technology Center (NWTC) mast M5, located near Denver, CO.
+Wind Resource Assessments typically treat turbulence as constant over time. This analysis seeks to understand how valid that assumption is by examining variation of wind power spectra over time. I hypothesized that power spectra changed similarly to wind shear, with strong seasonal/diurnal variation. The data source is 20hz sonic anemometer data from the National Renewable Energy Lab (NREL) National Wind Technology Center (NWTC) mast M5, located near Denver, CO.
 
 Project Organization
 ------------
