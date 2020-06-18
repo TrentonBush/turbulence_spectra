@@ -4,7 +4,7 @@ setup(
     name='src',
     packages=find_packages(),
     version='0.1.0',
-    description='Analyze seasonal/diurnal g NREL NWTC M5 mast data',
+    description='Analyze turbulence spectra of NREL NWTC M5 data',
     author='Trenton Bush',
     license='MIT',
 )
