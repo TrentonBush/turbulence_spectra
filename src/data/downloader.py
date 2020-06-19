@@ -65,10 +65,13 @@ async def main(urls: list, out_dir: Path, max_concurrent=8, max_per_second=1):
         )
 
 
-urls = time_sampler(pd.Timestamp("2019-1-1"), 24, 24, 1)
+urls = time_sampler(pd.Timestamp("2019-1-1"), 24, 48, 1)
 asyncio.run(main(urls, Path("./data/raw")))
 # started 15:33:44
 # HTTPError for 06_17_2019
 # HTTPError for 07_18_2019
-# finished 15:51:28
-# replaced those two dates with the one after, to get 100% day coverage
+# HTTPError for 07_25_2019
+# HTTPError for 12_09_2019
+# finished 16:11:28
+# replaced those dates with the subsequent day to get 100% 10-min coverage
+# there will still be lots of missing data at the 20hz level though
