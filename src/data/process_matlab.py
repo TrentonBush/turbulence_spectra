@@ -4,7 +4,7 @@ from pathlib import Path
 from scipy.io import loadmat
 from scipy.fft import next_fast_len, rfft
 from scipy.integrate import cumtrapz
-from typing import Tuple
+from typing import Tuple, Optional, Union
 
 
 def matlab_to_pandas(filepath: Path) -> pd.DataFrame:
@@ -63,7 +63,7 @@ def cube_spectral_density(
 def cube_welch(
     signal: np.ndarray,
     segment_size_seconds: int = 150,
-    square=False,
+    square: bool = False,
     sample_freq: float = 20.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
     # no overlap because
@@ -98,7 +98,7 @@ def cube_welch(
 
 def integrated_spectral_densities(
     anemometer: np.ndarray,
-    total: float = None,
+    total: Optional[float] = None,
     eval_freqs: Tuple[float, ...] = (1 / 60, 1 / 30, 1 / 10, 1 / 2),
     **kwargs,
 ) -> np.ndarray:
