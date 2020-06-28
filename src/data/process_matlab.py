@@ -53,3 +53,16 @@ def sonic_summary(df: pd.DataFrame, height: str):
     )
 
     return out
+
+
+def cup_summary(df: pd.DataFrame, inst: str):
+    raise NotImplementedError  # need spectral density functions
+    out = {}
+    resampled = df[inst][::20]  # cups are oversampled at 20Hz, actual data is 1Hz
+
+    out["nan_count"] = resampled.isna().sum()
+    out["mean"] = resampled.mean()
+    out["mean_square"] = resampled.pow(2).mean()
+    out["mean_cube"] = resampled.pow(3).mean()
+
+    return out
