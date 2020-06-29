@@ -117,24 +117,50 @@ def integrated_spectral_densities(
     return np.interp(eval_freqs, freqs[1:], coeffs)
 
 
-def sonic_summary(df: pd.DataFrame, height: str):
-    raise NotImplementedError  # need spectral density functions
+def sonic_summary(
+    df: pd.DataFrame, height: str, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
+):
     out = {}
     horizontal = f"Sonic_CupEqHorizSpeed_{height}m"
     vertical = f"Sonic_z_clean_{height}m"
     direction = f"Sonic_direction_{height}m"
+    eval_freqs = tuple([1.0 / x for x in eval_periods])
+    square_labels = [f"cum_square_sd_{period}s" for period in eval_periods]
+    cube_labels = [f"cum_cube_sd_{period}s" for period in eval_periods]
+    vert_square_labels = [f"vert_cum_square_sd_{period}s" for period in eval_periods]
 
     out["nan_count"] = df[horizontal].isna().sum()
     out["mean"] = df[horizontal].mean()
     out["mean_square"] = df[horizontal].pow(2).mean()
     out["mean_cube"] = df[horizontal].pow(3).mean()
+    # square
+    cum_sd = integrated_spectral_densities(
+        df[horizontal].values,
+        total=(out["mean_square"] - out["mean"] ** 2),
+        eval_freqs=eval_freqs,
+        square=True,
+    )
+    out.update(dict(zip(square_labels, cum_sd)))
+    # cube
+    cum_sd = integrated_spectral_densities(
+        df[horizontal].values,
+        total=(out["mean_cube"] - out["mean"] ** 3),
+        eval_freqs=eval_freqs,
+        square=False,
+    )
+    out.update(dict(zip(cube_labels, cum_sd)))
 
-    out["nan_count_vert"] = df[vertical].isna().sum()
-    out["mean_vert"] = df[vertical].mean()
-    out["mean_square_vert"] = df[vertical].pow(2).mean()
-    out["mean_cube_vert"] = df[vertical].pow(3).mean()
+    out["vert_nan_count"] = df[vertical].isna().sum()
+    out["vert_mean"] = df[vertical].mean()
+    out["vert_mean_square"] = df[vertical].pow(2).mean()
+    out["vert_mean_cube"] = df[vertical].pow(3).mean()
+    # vert square
+    cum_sd = integrated_spectral_densities(
+        df[vertical].values, eval_freqs=eval_freqs, square=True,
+    )
+    out.update(dict(zip(vert_square_labels, cum_sd)))
 
-    out["mean_dir"] = df[direction].mean()
+    out["dir_mean"] = df[direction].mean()
     out["waked_frac"] = (
         df[[direction]].query(f"80 < {direction} < 210").count()[0] / 12000
     )
@@ -142,15 +168,35 @@ def sonic_summary(df: pd.DataFrame, height: str):
     return out
 
 
-def cup_summary(df: pd.DataFrame, inst: str):
-    raise NotImplementedError  # need spectral density functions
+def cup_summary(
+    df: pd.DataFrame, inst: str, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
+):
     out = {}
     resampled = df[inst][::20]  # cups are oversampled at 20Hz, actual data is 1Hz
+    eval_freqs = tuple([1.0 / x for x in eval_periods])
+    square_labels = [f"cum_square_sd_{period}s" for period in eval_periods]
+    cube_labels = [f"cum_cube_sd_{period}s" for period in eval_periods]
 
     out["nan_count"] = resampled.isna().sum()
     out["mean"] = resampled.mean()
     out["mean_square"] = resampled.pow(2).mean()
     out["mean_cube"] = resampled.pow(3).mean()
+    # square
+    cum_sd = integrated_spectral_densities(
+        resampled.values,
+        total=(out["mean_square"] - out["mean"] ** 2),
+        eval_freqs=eval_freqs,
+        square=True,
+    )
+    out.update(dict(zip(square_labels, cum_sd)))
+    # cube
+    cum_sd = integrated_spectral_densities(
+        resampled.values,
+        total=(out["mean_cube"] - out["mean"] ** 3),
+        eval_freqs=eval_freqs,
+        square=False,
+    )
+    out.update(dict(zip(cube_labels, cum_sd)))
 
     return out
 
