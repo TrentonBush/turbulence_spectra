@@ -7,7 +7,7 @@ from scipy.integrate import cumtrapz
 from typing import Tuple, Optional, Union
 
 
-def matlab_to_pandas(filepath: Path) -> pd.DataFrame:
+def matlab_to_pandas(filepath: Path, timestamps=False) -> pd.DataFrame:
     exclusions = {
         "__header__",
         "__version__",
@@ -23,12 +23,31 @@ def matlab_to_pandas(filepath: Path) -> pd.DataFrame:
 
     utc_offset = matlab["tower"]["UTCoffset"].item()
     if utc_offset != -7:
-        raise ValueError(f"Unexpected utc_offset: {utc_offset}")
+        raise ValueError(f"Unexpected utc_offset: {utc_offset}. Hardcoded to NREL NWTC masts.")
 
     df = pd.DataFrame()
     for key in matlab.keys():
         if key not in exclusions:
             df[key] = matlab[key]["val"].item()
+
+    # Convert times from matlab to pandas
+    # Matlab format is "days since 0 AD"
+    # offset is days from 0 AD to start of Unix Epoch
+    offset = pd.Period(pd.Timestamp(0), freq='D') - pd.Period(year=0, month=0, day=0, freq='D')
+    
+    if timestamps:
+        df['timestamp'] = pd.to_datetime(df['time_UTC'] - offset.n, unit='d') + pd.Timedelta(utc_offset, unit='h')
+        # round to meaningful precision, in units of miliseconds
+        df['timestamp'] = df['timestamp'].round(str(int(1000 / sample_freq)) + 'ms')
+        first_timestamp = df['timestamp'][0]
+    else:
+        first_timestamp = pd.to_datetime(df['time_UTC'][0] - offset.n, unit='d') + pd.Timedelta(utc_offset, unit='h')
+        first_timestamp = first_timestamp.round(str(int(1000 / sample_freq)) + 'ms')
+    
+    # check date consistency
+    file_date = pd.to_datetime(filepath.name[:16], format='%m_%d_%Y_%H_%M')
+    if file_date != first_timestamp:
+        raise ValueError(f'Timestamp mismatch. Filename {filename} implies {file_date}, but first timestamp is {first_timestamp}')
 
     return df
 
@@ -121,6 +140,7 @@ def sonic_summary(
     df: pd.DataFrame, height: str, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
 ):
     out = {}
+    out["height"] = int(height)
     horizontal = f"Sonic_CupEqHorizSpeed_{height}m"
     vertical = f"Sonic_z_clean_{height}m"
     direction = f"Sonic_direction_{height}m"
@@ -172,6 +192,7 @@ def cup_summary(
     df: pd.DataFrame, inst: str, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
 ):
     out = {}
+    out["height"] = int(inst.split("_")[-1][:-1])  # names end with _123m
     resampled = df[inst][::20]  # cups are oversampled at 20Hz, actual data is 1Hz
     eval_freqs = tuple([1.0 / x for x in eval_periods])
     square_labels = [f"cum_square_sd_{period}s" for period in eval_periods]
@@ -203,7 +224,7 @@ def cup_summary(
 
 def misc_summary(df: pd.DataFrame):
     out = {}
-    out["mean_delta_temp"] = df["DeltaT_122_87m"].mean() + df["DeltaT_87_38m"].mean()
-    out["mean_temp"] = df["Air_Temp_38m"].mean()
+    out["delta_temp_122"] = df["DeltaT_122_87m"].mean() + df["DeltaT_87_38m"].mean()
+    out["mean_temp_38"] = df["Air_Temp_38m"].mean()
     out["mean_precip"] = df["PRECIP_INTEN"].mean()
     return out
