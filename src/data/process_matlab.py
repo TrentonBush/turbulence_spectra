@@ -7,6 +7,9 @@ from scipy.integrate import cumtrapz
 from typing import Tuple, Optional, Union
 
 
+EXPECTED_UTC_OFFSET = -7
+
+
 def matlab_to_pandas(filepath: Path, timestamps=False) -> pd.DataFrame:
     exclusions = {
         "__header__",
@@ -22,8 +25,8 @@ def matlab_to_pandas(filepath: Path, timestamps=False) -> pd.DataFrame:
         raise ValueError(f"Unexpected sample_freq: {sample_freq}")
 
     utc_offset = matlab["tower"]["UTCoffset"].item()
-    if utc_offset != -7:
-        raise ValueError(f"Unexpected utc_offset: {utc_offset}. Hardcoded to NREL NWTC masts.")
+    if utc_offset != EXPECTED_UTC_OFFSET:
+        raise ValueError(f"Unexpected utc_offset: {utc_offset}.")
 
     df = pd.DataFrame()
     for key in matlab.keys():
@@ -33,21 +36,29 @@ def matlab_to_pandas(filepath: Path, timestamps=False) -> pd.DataFrame:
     # Convert times from matlab to pandas
     # Matlab format is "days since 0 AD"
     # offset is days from 0 AD to start of Unix Epoch
-    offset = pd.Period(pd.Timestamp(0), freq='D') - pd.Period(year=0, month=0, day=0, freq='D')
-    
+    offset = pd.Period(pd.Timestamp(0), freq="D") - pd.Period(
+        year=0, month=0, day=0, freq="D"
+    )
+
     if timestamps:
-        df['timestamp'] = pd.to_datetime(df['time_UTC'] - offset.n, unit='d') + pd.Timedelta(utc_offset, unit='h')
+        df["timestamp"] = pd.to_datetime(
+            df["time_UTC"] - offset.n, unit="d"
+        ) + pd.Timedelta(utc_offset, unit="h")
         # round to meaningful precision, in units of miliseconds
-        df['timestamp'] = df['timestamp'].round(str(int(1000 / sample_freq)) + 'ms')
-        first_timestamp = df['timestamp'][0]
+        df["timestamp"] = df["timestamp"].round(str(int(1000 / sample_freq)) + "ms")
+        first_timestamp = df["timestamp"][0]
     else:
-        first_timestamp = pd.to_datetime(df['time_UTC'][0] - offset.n, unit='d') + pd.Timedelta(utc_offset, unit='h')
-        first_timestamp = first_timestamp.round(str(int(1000 / sample_freq)) + 'ms')
-    
+        first_timestamp = pd.to_datetime(
+            df["time_UTC"][0] - offset.n, unit="d"
+        ) + pd.Timedelta(utc_offset, unit="h")
+        first_timestamp = first_timestamp.round(str(int(1000 / sample_freq)) + "ms")
+
     # check date consistency
-    file_date = pd.to_datetime(filepath.name[:16], format='%m_%d_%Y_%H_%M')
-    if file_date != first_timestamp:
-        raise ValueError(f'Timestamp mismatch. Filename {filename} implies {file_date}, but first timestamp is {first_timestamp}')
+    file_date = pd.to_datetime(filepath.name[:16], format="%m_%d_%Y_%H_%M")
+    if file_date != (first_timestamp - pd.Timedelta(utc_offset, unit="h")):
+        raise ValueError(
+            f"Timestamp mismatch. Filename {filepath.name} implies {file_date}, but first timestamp is {first_timestamp}"
+        )
 
     return df
 
@@ -89,7 +100,7 @@ def cube_welch(
     #   1) I need a low number of segments to preserve resolution, and
     #   2) don't want to underweight information at the ends of the signal
     N = len(signal)
-    nperseg = segment_size_seconds * sample_freq
+    nperseg = int(segment_size_seconds * sample_freq)
 
     n_chunks = N / nperseg
     if n_chunks % 1 != 0:
@@ -137,10 +148,10 @@ def integrated_spectral_densities(
 
 
 def sonic_summary(
-    df: pd.DataFrame, height: str, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
+    df: pd.DataFrame, height: int, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
 ):
     out = {}
-    out["height"] = int(height)
+    out["height"] = height
     horizontal = f"Sonic_CupEqHorizSpeed_{height}m"
     vertical = f"Sonic_z_clean_{height}m"
     direction = f"Sonic_direction_{height}m"
@@ -208,6 +219,7 @@ def cup_summary(
         total=(out["mean_square"] - out["mean"] ** 2),
         eval_freqs=eval_freqs,
         square=True,
+        sample_freq=1,
     )
     out.update(dict(zip(square_labels, cum_sd)))
     # cube
@@ -216,6 +228,7 @@ def cup_summary(
         total=(out["mean_cube"] - out["mean"] ** 3),
         eval_freqs=eval_freqs,
         square=False,
+        sample_freq=1,
     )
     out.update(dict(zip(cube_labels, cum_sd)))
 
@@ -224,7 +237,9 @@ def cup_summary(
 
 def misc_summary(df: pd.DataFrame):
     out = {}
-    out["delta_temp_122"] = df["DeltaT_122_87m"].mean() + df["DeltaT_87_38m"].mean()
     out["mean_temp_38"] = df["Air_Temp_38m"].mean()
+    out["mean_temp_122"] = (
+        out["mean_temp_38"] + df["DeltaT_122_87m"].mean() + df["DeltaT_87_38m"].mean()
+    )
     out["mean_precip"] = df["PRECIP_INTEN"].mean()
     return out
