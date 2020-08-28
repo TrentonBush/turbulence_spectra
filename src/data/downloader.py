@@ -37,20 +37,21 @@ async def download_file(
 ):
     url = "".join([BASE_URL, *url_parts])
     filepath = out_dir / url_parts[1]
-    async with client.stream("GET", url) as resp:
-        try:
-            resp.raise_for_status()
-            async with aiofiles.open(filepath, "wb") as f:
-                async for data in resp.aiter_bytes():
-                    if data:
-                        await f.write(data)
-            print(
-                f"Downloaded {url_parts[1]} at {pd.Timestamp('now').strftime('%H:%M:%S')}"
-            )
-        except httpx.HTTPError:
-            logging.info(f"HTTPError for {url_parts[1]}")
-        except httpx.ConnectTimeout:
-            logging.warning(f"Timeout for {url_parts[1]} Needs re-download.")
+    try:
+        async with client.stream("GET", url) as resp:
+            try:
+                resp.raise_for_status()
+                async with aiofiles.open(filepath, "wb") as f:
+                    async for data in resp.aiter_bytes():
+                        if data:
+                            await f.write(data)
+                print(
+                    f"Downloaded {url_parts[1]} at {pd.Timestamp('now').strftime('%H:%M:%S')}"
+                )
+            except httpx.HTTPError:
+                logging.info(f"HTTPError for {url_parts[1]}")
+    except (httpx.ConnectTimeout, httpx._exceptions.ConnectTimeout):
+        logging.warning(f"Timeout for {url_parts[1]} Needs re-download.")
 
 
 def coro(func):
