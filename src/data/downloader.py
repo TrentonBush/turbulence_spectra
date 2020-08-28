@@ -87,8 +87,8 @@ async def main(
         await aiometer.run_on_each(
             partial(download_file, client, directory),
             urls,
-            max_at_once=max_concurrent,
-            max_per_second=max_per_second,
+            max_at_once=int(max_concurrent),
+            max_per_second=float(max_per_second),
         )
     end = pd.Timestamp("now")
     time = end - begin
