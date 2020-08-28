@@ -1,45 +1,41 @@
 import httpx
-import asyncio
 import aiometer
 import aiofiles
+import asyncio
 from pathlib import Path
-from functools import partial
+from functools import partial, wraps
 import pandas as pd
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+import logging
+import typer
 
 # NREL NWTC mast M5, 20hz data, matlab files (only file format available)
 BASE_URL = "https://wind.nrel.gov/MetData/135mData/M5Twr/20Hz/mat/"
 
-
-def time_sampler(
-    start_date: pd.Timestamp,
-    samples_per_day: int,
-    samples_per_year: int,
-    num_years: int = 1,
-) -> List[Tuple[str]]:
-
-    # Sample output:
-    # [('2019/01/01/', '01_01_2019_00_00_00_000.mat'),
-    # ('2019/01/01/', '01_01_2019_06_00_00_000.mat')]
-    days = start_date + pd.Timedelta("1D") * pd.Series(
-        np.round(np.arange(samples_per_year * num_years) * 365.25 / samples_per_year)
+def dense_samples(
+    *, start_timestamp: str, end_timestamp: str, files_to_skip: Optional[set] = None,
+) -> List[Tuple[str, str]]:
+    times = pd.date_range(start_timestamp, end_timestamp, freq="10min")
+    samples = pd.DataFrame(
+        {
+            "urls": times.strftime("%Y/%m/%d/"),
+            "filenames": times.strftime("%m_%d_%Y_%H_%M_%S_000.mat"),
+        }
     )
-    times = pd.Timedelta("10min") * pd.Series(
-        np.round(np.arange(samples_per_day) * 144 / samples_per_day)
-    )
-    samples = pd.DataFrame(pd.concat([times + day for day in days], ignore_index=True))
-    samples["url_date"] = samples[0].dt.strftime("%Y/%m/%d/")
-    samples["filename"] = samples[0].dt.strftime("%m_%d_%Y_%H_%M_%S_000.mat")
-    return list(samples[["url_date", "filename"]].itertuples(index=False, name=None))
+    if files_to_skip is not None:
+        filter_ = ~samples["filenames"].isin(files_to_skip)
+        logging.info(
+            f"downloader.dense_samples skipped {filter_.size - filter_.sum()} preexisting files"
+        )
+        samples = samples[filter_]  # exclude preexisting
+    return list(samples[["urls", "filenames"]].itertuples(index=False, name=None))
 
 
-def filename_from_url(url: str) -> str:
-    return url.split("/")[-1]
-
-
-async def download(client: httpx.Client, out_dir: Path, url_parts: tuple):
-    url = BASE_URL + url_parts[0] + url_parts[1]
+async def download_file(
+    client: httpx.Client, out_dir: Path, url_parts: Tuple[str, str]
+):
+    url = "".join([BASE_URL, *url_parts])
     filepath = out_dir / url_parts[1]
     async with client.stream("GET", url) as resp:
         try:
@@ -49,29 +45,68 @@ async def download(client: httpx.Client, out_dir: Path, url_parts: tuple):
                     if data:
                         await f.write(data)
             print(
-                f"Done with {url_parts[1]} at {pd.Timestamp('now').strftime('%H:%M:%S')}"
+                f"Downloaded {url_parts[1]} at {pd.Timestamp('now').strftime('%H:%M:%S')}"
             )
         except httpx.HTTPError:
-            print(f"HTTPError for {url_parts[1]}")
+            logging.info(f"HTTPError for {url_parts[1]}")
 
 
-async def main(urls: list, out_dir: Path, max_concurrent=8, max_per_second=1):
+def coro(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(func(*args, **kwargs))
+
+    return wrapper
+
+
+@coro
+async def main(
+    start_timestamp: str,
+    end_timestamp: str,
+    output_directory: str,
+    max_concurrent=8,
+    max_per_second=1,
+):
+    directory = Path(output_directory)
+    files_to_skip = set([path.name for path in directory.glob("*.mat")])
+    if not files_to_skip:
+        files_to_skip = None  # type: ignore
+
+    urls = dense_samples(
+        start_timestamp=start_timestamp,
+        end_timestamp=end_timestamp,
+        files_to_skip=files_to_skip,
+    )
+
+    print("Starting Download")
+    logging.info("Starting download")
+    begin = pd.Timestamp("now")
     async with httpx.AsyncClient() as client:
         await aiometer.run_on_each(
-            partial(download, client, out_dir),
+            partial(download_file, client, directory),
             urls,
             max_at_once=max_concurrent,
             max_per_second=max_per_second,
         )
+    end = pd.Timestamp("now")
+    time = end - begin
+    count = len(urls)
+    message = "\n".join(
+        [
+            f"Elapsed time: {time.round('s')}",
+            f"URLs: {count}",
+            f"Seconds per URL: {(time / count).total_seconds():.2f}",
+        ]
+    )
+
+    logging.info(message)
+    print(message)
 
 
-urls = time_sampler(pd.Timestamp("2019-1-1"), 24, 48, 1)
-asyncio.run(main(urls, Path("./data/raw")))
-# started 15:33:44
-# HTTPError for 06_17_2019
-# HTTPError for 07_18_2019
-# HTTPError for 07_25_2019
-# HTTPError for 12_09_2019
-# finished 16:11:28
-# replaced those dates with the subsequent day to get 100% 10-min coverage
-# there will still be lots of missing data at the 20hz level though
+if __name__ == "__main__":
+    logging.basicConfig(
+        filename=Path('./data/raw/') / "download.log",
+        format="%(asctime)s %(message)s",
+        level=logging.INFO,
+    )
+    typer.run(main)
