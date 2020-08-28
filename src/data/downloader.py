@@ -5,13 +5,13 @@ import asyncio
 from pathlib import Path
 from functools import partial, wraps
 import pandas as pd
-import numpy as np
 from typing import List, Tuple, Optional
 import logging
 import typer
 
 # NREL NWTC mast M5, 20hz data, matlab files (only file format available)
 BASE_URL = "https://wind.nrel.gov/MetData/135mData/M5Twr/20Hz/mat/"
+
 
 def dense_samples(
     *, start_timestamp: str, end_timestamp: str, files_to_skip: Optional[set] = None,
@@ -49,6 +49,8 @@ async def download_file(
             )
         except httpx.HTTPError:
             logging.info(f"HTTPError for {url_parts[1]}")
+        except httpx.ConnectTimeout:
+            logging.warning(f"Timeout for {url_parts[1]} Needs re-download.")
 
 
 def coro(func):
@@ -105,7 +107,7 @@ async def main(
 
 if __name__ == "__main__":
     logging.basicConfig(
-        filename=Path('./data/raw/') / "download.log",
+        filename=Path("./data/raw/") / "download.log",
         format="%(asctime)s %(message)s",
         level=logging.INFO,
     )
