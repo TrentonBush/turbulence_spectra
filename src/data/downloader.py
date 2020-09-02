@@ -5,7 +5,7 @@ import asyncio
 from pathlib import Path
 from functools import partial, wraps
 import pandas as pd
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Sequence
 import logging
 import typer
 
@@ -54,7 +54,44 @@ async def download_file(
         logging.warning(f"Timeout for {url_parts[1]} Needs re-download.")
 
 
+async def download_many(
+    urls: Sequence[Tuple[str, str]],
+    output_directory: Path,
+    max_concurrent=5,
+    max_per_second=0.75,
+):
+    directory = Path(output_directory)
+    count = len(urls)
+    message = f"Starting Download of {count} files"
+    print(message)
+    logging.info(message)
+    start = pd.Timestamp("now")
+
+    async with httpx.AsyncClient() as client:
+        await aiometer.run_on_each(
+            partial(download_file, client, directory),
+            urls,
+            max_at_once=int(max_concurrent),
+            max_per_second=float(max_per_second),
+        )
+
+    end = pd.Timestamp("now")
+    time = end - start
+    message = "\n".join(
+        [
+            f"Elapsed time: {time.round('s')}",
+            f"URLs: {count}",
+            f"Seconds per URL: {(time / count).total_seconds():.2f}",
+        ]
+    )
+
+    logging.info(message)
+    print(message)
+
+
 def coro(func):
+    """call async function. Necessary for typer CLI integration."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         return asyncio.run(func(*args, **kwargs))
@@ -66,9 +103,9 @@ def coro(func):
 async def main(
     start_timestamp: str,
     end_timestamp: str,
-    output_directory: str,
-    max_concurrent=8,
-    max_per_second=1,
+    output_directory: Path,
+    max_concurrent=5,
+    max_per_second=0.75,
 ):
     directory = Path(output_directory)
     files_to_skip = set([path.name for path in directory.glob("*.mat")])
@@ -81,29 +118,9 @@ async def main(
         files_to_skip=files_to_skip,
     )
 
-    print("Starting Download")
-    logging.info("Starting download")
-    begin = pd.Timestamp("now")
-    async with httpx.AsyncClient() as client:
-        await aiometer.run_on_each(
-            partial(download_file, client, directory),
-            urls,
-            max_at_once=int(max_concurrent),
-            max_per_second=float(max_per_second),
-        )
-    end = pd.Timestamp("now")
-    time = end - begin
-    count = len(urls)
-    message = "\n".join(
-        [
-            f"Elapsed time: {time.round('s')}",
-            f"URLs: {count}",
-            f"Seconds per URL: {(time / count).total_seconds():.2f}",
-        ]
+    await download_many(
+        urls, directory, max_concurrent=max_concurrent, max_per_second=max_per_second
     )
-
-    logging.info(message)
-    print(message)
 
 
 if __name__ == "__main__":
