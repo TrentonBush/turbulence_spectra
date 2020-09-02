@@ -8,6 +8,7 @@ import pandas as pd
 from typing import List, Tuple, Optional
 import logging
 import typer
+from httpcore import ReadTimeout
 
 # NREL NWTC mast M5, 20hz data, matlab files (only file format available)
 BASE_URL = "https://wind.nrel.gov/MetData/135mData/M5Twr/20Hz/mat/"
@@ -50,7 +51,9 @@ async def download_file(
                 )
             except httpx.HTTPError:
                 logging.info(f"HTTPError for {url_parts[1]}")
-    except (httpx.ConnectTimeout, httpx._exceptions.ConnectTimeout):
+            except ReadTimeout:
+                logging.info(f"ReadTimeout for {url_parts[1]}")
+    except (httpx.ConnectTimeout, httpx._exceptions.ConnectTimeout, ReadTimeout):
         logging.warning(f"Timeout for {url_parts[1]} Needs re-download.")
 
 
@@ -68,7 +71,7 @@ async def main(
     end_timestamp: str,
     output_directory: str,
     max_concurrent=8,
-    max_per_second=1,
+    max_per_second=0.5,
 ):
     directory = Path(output_directory)
     files_to_skip = set([path.name for path in directory.glob("*.mat")])
@@ -108,8 +111,8 @@ async def main(
 
 if __name__ == "__main__":
     logging.basicConfig(
-        filename=Path("./data/raw/") / "download.log",
+        filename=Path("/mnt/f/turb_data/") / "download.log",
         format="%(asctime)s %(message)s",
         level=logging.INFO,
     )
-    typer.run(main)
+    main("2019-04-15 00:00", "2019-04-30 23:50", "/mnt/f/turb_data")
