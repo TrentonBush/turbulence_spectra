@@ -12,7 +12,6 @@ STANDARD_SUBSET = (
     "Air_Temp_38m",
     "DeltaT_122_87m",
     "DeltaT_87_38m",
-    "DeltaT_38_3m",
     "PRECIP_INTEN",
     "Cup_WS_C1_130m",
     "Cup_WS_122m",
