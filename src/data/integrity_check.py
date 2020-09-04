@@ -1,5 +1,6 @@
 from pathlib import Path
 from scipy.io import loadmat
+from scipy.io.matlab.miobase import MatReadError
 from tqdm import tqdm
 from multiprocessing import Pool
 from typing import List, Sequence, Optional
@@ -21,12 +22,16 @@ def check_is_corrupt(file: Path) -> bool:
     -------
     bool
         Answers "is this file corrupt?"
-        True if loadmat() throws OSError; False if loadmat() is successful
+        True if loadmat() throws exception; False if loadmat() is successful
     """
     try:
         _ = loadmat(file)
         return False
     except OSError:  # a partially-downloaded file
+        print(f"Corrupt: {file.name}")
+        return True
+    except MatReadError: # 0 byte file (initiated download but not executed)
+        print(f"Empty: {file.name}")
         return True
 
 
@@ -47,7 +52,7 @@ def corrupt_file_filter_multiprocess(candidate_files: Sequence[Path], n_processe
     """
     logging.info(f"Checking integrity of {len(candidate_files)} files")
     # check_is_corrupt() is strongly CPU-bound.
-    # 4-core multiprocessing resulted in 4x speedup and still only 20% SSD utilization
+    # 4-core multiprocessing resulted in 4x speedup and still only 85% SSD utilization
     # TODO: change logging so corrupt files are logged as they are found. More robust to uncaught exceptions.
     with Pool(processes=n_processes) as pool:
         boolean_mask = list(
