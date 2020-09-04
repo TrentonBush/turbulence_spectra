@@ -4,13 +4,51 @@ from pathlib import Path
 from scipy.io import loadmat
 from scipy.fft import next_fast_len, rfft
 from scipy.integrate import cumtrapz
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Sequence
 
 
 EXPECTED_UTC_OFFSET = -7
+STANDARD_SUBSET = (
+    "Air_Temp_38m",
+    "DeltaT_122_87m",
+    "DeltaT_87_38m",
+    "DeltaT_38_3m",
+    "PRECIP_INTEN",
+    "Cup_WS_C1_130m",
+    "Cup_WS_122m",
+    "Cup_WS_C1_105m",
+    "Cup_WS_87m",
+    "Cup_WS_C1_80m",
+    "Cup_WS_C1_55m",
+    "Cup_WS_38m",
+    "Cup_WS_C1_30m",
+    "Cup_WS_10m",
+    "Cup_WS_3m",
+    "time_UTC",
+    "Sonic_CupEqHorizSpeed_119m",
+    "Sonic_direction_119m",
+    "Sonic_z_clean_119m",
+    "Sonic_CupEqHorizSpeed_100m",
+    "Sonic_direction_100m",
+    "Sonic_z_clean_100m",
+    "Sonic_CupEqHorizSpeed_74m",
+    "Sonic_direction_74m",
+    "Sonic_z_clean_74m",
+    "Sonic_CupEqHorizSpeed_61m",
+    "Sonic_direction_61m",
+    "Sonic_z_clean_61m",
+    "Sonic_CupEqHorizSpeed_41m",
+    "Sonic_direction_41m",
+    "Sonic_z_clean_41m",
+    "Sonic_CupEqHorizSpeed_15m",
+    "Sonic_direction_15m",
+    "Sonic_z_clean_15m",
+)
 
 
-def matlab_to_pandas(filepath: Path, timestamps=False) -> pd.DataFrame:
+def matlab_to_pandas(
+    filepath: Path, timestamps=False, col_subset: Optional[Sequence] = STANDARD_SUBSET
+) -> pd.DataFrame:
     exclusions = {
         "__header__",
         "__version__",
@@ -29,8 +67,12 @@ def matlab_to_pandas(filepath: Path, timestamps=False) -> pd.DataFrame:
         raise ValueError(f"Unexpected utc_offset: {utc_offset}.")
 
     df = pd.DataFrame()
-    for key in matlab.keys():
-        if key not in exclusions:
+    if col_subset is None:  # get all 150 cols
+        for key in matlab.keys():
+            if key not in exclusions:
+                df[key] = matlab[key]["val"].item()
+    else:
+        for key in col_subset:
             df[key] = matlab[key]["val"].item()
 
     # Convert times from matlab to pandas
@@ -162,12 +204,12 @@ def sonic_summary(
 
     out["nan_count"] = df[horizontal].isna().sum()
     out["mean"] = df[horizontal].mean()
-    out["mean_square"] = df[horizontal].pow(2).mean()
-    out["mean_cube"] = df[horizontal].pow(3).mean()
+    out["diff_mean_sq"] = df[horizontal].var()
+    out["diff_mean_cube"] = df[horizontal].pow(3).mean() - out["mean"] ** 3
     # square
     cum_sd = integrated_spectral_densities(
         df[horizontal].values,
-        total=(out["mean_square"] - out["mean"] ** 2),
+        total=(out["diff_mean_sq"]),
         eval_freqs=eval_freqs,
         square=True,
     )
@@ -175,7 +217,7 @@ def sonic_summary(
     # cube
     cum_sd = integrated_spectral_densities(
         df[horizontal].values,
-        total=(out["mean_cube"] - out["mean"] ** 3),
+        total=(out["diff_mean_cube"]),
         eval_freqs=eval_freqs,
         square=False,
     )
