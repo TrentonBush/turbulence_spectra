@@ -71,7 +71,7 @@ def corrupt_file_filter_multiprocess(candidate_files: Sequence[Path], n_processe
 async def main(
     directory: Path, max_concurrent=5, max_per_second=0.75,
 ):
-    """Check if .mat files load correctly. Re-download those that throw OSError.
+    """Check if .mat files load correctly. Re-download those that throw OSError or MatReadError.
 
     Parameters
     ----------

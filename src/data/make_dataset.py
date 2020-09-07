@@ -26,6 +26,13 @@ CUP_NAMES = (
 
 
 def create_logger():
+    """helper func to set up loggers within multiprocessing functions
+
+    Returns
+    -------
+    logging.Logger
+        logger
+    """
     logger = multiprocessing.get_logger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter(
@@ -41,6 +48,18 @@ def create_logger():
 
 
 def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """extract features from a 10-minute matlab file
+
+    Parameters
+    ----------
+    filepath : Path
+        .mat filepath
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+        resulting dataframes, (sonics, cups, miscellaneous)
+    """
     logger = create_logger()
     timestamp = pd.to_datetime(
         filepath.name[:16], format="%m_%d_%Y_%H_%M"
@@ -83,6 +102,21 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
 def summarize_many_multiprocess(
     input_files: Sequence[Path], n_processes: Optional[int] = None,
 ) -> Dict[str, pd.DataFrame]:
+    """apply summarize_file to many files using multiprocessing
+
+    Parameters
+    ----------
+    input_files : Sequence[Path]
+        iterable of .mat files
+    n_processes : Optional[int], optional
+        number of processes to use, by default None, which is interpreted as os.cpu_count()
+
+    Returns
+    -------
+    Dict[str, pd.DataFrame]
+        results for each instrument type, concatenated across all input files
+        Keys: "sonic", "cup", "misc"
+    """
     logger = create_logger()
     count = len(input_files)
     logger.info(f"Processing {count} files")
@@ -106,6 +140,15 @@ def summarize_many_multiprocess(
 
 
 def main(source_dir: str, out_dir: str) -> None:
+    """summarize all .mat files in source_dir and write results as .parquet files to out_dir
+
+    Parameters
+    ----------
+    source_dir : str
+        directory containing *.mat files
+    out_dir : str
+        directory to write resulting .parquet files
+    """
     input_files = list(Path(source_dir).glob("*.mat"))
     out_dfs = summarize_many_multiprocess(input_files)
 
