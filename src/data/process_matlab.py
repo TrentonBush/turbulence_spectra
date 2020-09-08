@@ -6,7 +6,8 @@ from scipy.fft import next_fast_len, rfft
 from scipy.integrate import cumtrapz
 from typing import Tuple, Optional, Sequence
 
-
+SONIC_SAMPLE_FREQ = 20
+CUP_SAMPLE_FREQ = 1
 EXPECTED_UTC_OFFSET = -7
 STANDARD_SUBSET = (
     "Air_Temp_38m",
@@ -188,6 +189,16 @@ def integrated_spectral_densities(
     return np.interp(eval_freqs, freqs[1:], coeffs)
 
 
+def min_max(column: pd.Series) -> tuple:
+    return tuple(column.quantile([0, 1]).squeeze())
+
+
+def three_second_gust(column: pd.Series, sample_freq: float) -> float:
+    """a commonly available metric used to assess structural strength requirements"""
+    window_size = 3 * sample_freq
+    return column.rolling(window_size).mean().max()[0]
+
+
 def sonic_summary(
     df: pd.DataFrame, height: int, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
 ):
@@ -236,6 +247,8 @@ def sonic_summary(
     out["waked_frac"] = (
         df[[direction]].query(f"80 < {direction} < 210").count()[0] / 12000
     )
+    out["min"], out["max"] = min_max(horizontal)
+    out["3s_gust"] = three_second_gust(horizontal, SONIC_SAMPLE_FREQ)
 
     return out
 
@@ -245,7 +258,10 @@ def cup_summary(
 ):
     out = {}
     out["height"] = int(inst.split("_")[-1][:-1])  # names end with _123m
-    resampled = df[inst][::20]  # cups are oversampled at 20Hz, actual data is 1Hz
+    sample_ratio = int(
+        SONIC_SAMPLE_FREQ / CUP_SAMPLE_FREQ
+    )  # cups are oversampled at 20Hz, actual data is 1Hz
+    resampled = df[inst][::sample_ratio]
     eval_freqs = tuple([1.0 / x for x in eval_periods])
     square_labels = [f"cum_square_sd_{period}s" for period in eval_periods]
     cube_labels = [f"cum_cube_sd_{period}s" for period in eval_periods]
@@ -272,7 +288,8 @@ def cup_summary(
         sample_freq=1,
     )
     out.update(dict(zip(cube_labels, cum_sd)))
-
+    out["min"], out["max"] = min_max(resampled)
+    out["3s_gust"] = three_second_gust(resampled, CUP_SAMPLE_FREQ)
     return out
 
 
