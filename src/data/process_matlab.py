@@ -199,6 +199,18 @@ def three_second_gust(column: pd.Series, sample_freq: float) -> float:
     return column.rolling(window_size).mean().max()[0]
 
 
+def dir_from_vec(x, y) -> float:
+    """Due to wind direction sign convention (defined as where wind is coming from, NOT where it is going), wind velocity components must have sign inverted before passing into this function"""
+    return np.arctan2(x, y) * 180 / np.pi % 360
+
+
+def direction_mean(direction: pd.Series,) -> float:
+    x = np.cos(direction)
+    y = np.sin(direction)
+    mean_vector = (x.mean(), y.mean())
+    return dir_from_vec(*mean_vector) # don't need to invert components because they are derived from wind direction (already inverted)
+
+
 def sonic_summary(
     df: pd.DataFrame, height: int, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
 ):
@@ -243,12 +255,12 @@ def sonic_summary(
     )
     out.update(dict(zip(vert_square_labels, cum_sd)))
 
-    out["dir_mean"] = df[direction].mean()
+    out["dir_mean"] = direction_mean(df[direction])
     out["waked_frac"] = (
         df[[direction]].query(f"80 < {direction} < 210").count()[0] / 12000
     )
     out["min"], out["max"] = min_max(horizontal)
-    out["3s_gust"] = three_second_gust(horizontal, SONIC_SAMPLE_FREQ)
+    out["3s_gust"] = three_second_gust(horizontal, SONIC_SAMPLE_FREQ)  # type: ignore
 
     return out
 
@@ -289,7 +301,7 @@ def cup_summary(
     )
     out.update(dict(zip(cube_labels, cum_sd)))
     out["min"], out["max"] = min_max(resampled)
-    out["3s_gust"] = three_second_gust(resampled, CUP_SAMPLE_FREQ)
+    out["3s_gust"] = three_second_gust(resampled, CUP_SAMPLE_FREQ)  # type: ignore
     return out
 
 
