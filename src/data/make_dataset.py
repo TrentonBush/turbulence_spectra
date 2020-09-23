@@ -68,7 +68,7 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
         matlab_df = pmat.matlab_to_pandas(filepath)
     except (OSError, MatReadError, ValueError) as e:
         message = f"Skipped {filepath.name} due to load error"
-        tqdm.write(message)
+        tqdm.write(message + '. See log for details')
         logger.exception(message)
         logger.exception(e)
         return tuple([pd.DataFrame()] * 3)  # empty
@@ -83,7 +83,7 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
             cups.append(pd.DataFrame(pmat.cup_summary(matlab_df, cup), index=[0]))
     except ValueError as e:
         message = f"Skipped {filepath.name} due to processing error"
-        tqdm.write(message)
+        tqdm.write(message + '. See log for details')
         logger.exception(message)
         logger.exception(e)
         return tuple([pd.DataFrame()] * 3)  # empty
