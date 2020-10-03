@@ -120,7 +120,7 @@ def summarize_many_multiprocess(
     logger = create_logger()
     count = len(input_files)
     logger.info(f"Processing {count} files")
-    tqdm.write(f"Processing {count} files")
+    tqdm.write(f"Processing {count} files in parallel")
     start = pd.Timestamp("now")
     with multiprocessing.Pool(processes=n_processes) as pool:
         processed_files = list(
@@ -140,14 +140,14 @@ def summarize_many_multiprocess(
 
 
 def main(source_dir: str, out_dir: str) -> None:
-    """summarize all .mat files in source_dir and write results as .parquet files to out_dir
+    """summarize all .mat files in source_dir and write results as three .parquet files, one each for sonics, cups, and misc, to out_dir
 
     Parameters
     ----------
     source_dir : str
         directory containing *.mat files
     out_dir : str
-        directory to write resulting .parquet files
+        directory to write resulting three .parquet files
     """
     input_files = list(Path(source_dir).glob("*.mat"))
     out_dfs = summarize_many_multiprocess(input_files)
