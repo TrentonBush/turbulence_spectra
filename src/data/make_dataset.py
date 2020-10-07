@@ -70,7 +70,6 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
         message = f"Skipped {filepath.name} due to load error"
         tqdm.write(message + '. See log for details')
         logger.exception(message)
-        logger.exception(e)
         return tuple([pd.DataFrame()] * 3)  # empty
     sonics = []
     cups = []
@@ -85,7 +84,6 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
         message = f"Skipped {filepath.name} due to processing error"
         tqdm.write(message + '. See log for details')
         logger.exception(message)
-        logger.exception(e)
         return tuple([pd.DataFrame()] * 3)  # empty
 
     sonics = pd.concat(sonics, ignore_index=True)
