@@ -66,7 +66,7 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
     ) + pd.Timedelta(pmat.EXPECTED_UTC_OFFSET, unit="h")
     try:
         matlab_df = pmat.matlab_to_pandas(filepath)
-    except (OSError, MatReadError, ValueError) as e:
+    except (OSError, MatReadError, ValueError):
         message = f"Skipped {filepath.name} due to load error"
         tqdm.write(message + '. See log for details')
         logger.exception(message)
@@ -80,7 +80,7 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
             )
         for cup in CUP_NAMES:
             cups.append(pd.DataFrame(pmat.cup_summary(matlab_df, cup), index=[0]))
-    except ValueError as e:
+    except ValueError:
         message = f"Skipped {filepath.name} due to processing error"
         tqdm.write(message + '. See log for details')
         logger.exception(message)
