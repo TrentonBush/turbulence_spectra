@@ -56,10 +56,11 @@ def matlab_to_pandas(
         "tower",
         "datastream",
     }
+    filepath = Path(filepath)
     matlab = loadmat(filepath, squeeze_me=True)
 
     sample_freq = matlab["tower"]["daqfreq"].item()
-    if sample_freq != 20:
+    if sample_freq != SONIC_SAMPLE_FREQ:
         raise ValueError(f"Unexpected sample_freq: {sample_freq}")
 
     utc_offset = matlab["tower"]["UTCoffset"].item()
@@ -118,9 +119,10 @@ def cube_spectral_density(
     if not square:
         coeffs /= np.sqrt(
             2
-        )  # extra factor of 1/sqrt(2). Not sure derivation but confirmed vs manual test of E[x^3] - E[x]^3
+        )  # extra factor of 1/sqrt(2). Not sure derivation but confirmed via manual test of E[x^3] - E[x]^3
 
-    # one-sidedness correction due to rfft omitting negative frequencies. Explanation here: https://www.reddit.com/r/matlab/comments/4cqa10/fft_dc_component_scaling/
+    # one-sidedness correction due to rfft omitting negative frequencies.
+    # Explanation here: https://www.reddit.com/r/matlab/comments/4cqa10/fft_dc_component_scaling/
     if N % 2:  # odd, no nyquist coeff
         coeffs[1:] = coeffs[1:] * 2
     else:  # even, don't double Nyquist (last) coeff
@@ -199,16 +201,66 @@ def three_second_gust(column: pd.Series, sample_freq: float) -> float:
     return column.rolling(window_size).mean().max()[0]
 
 
-def dir_from_vec(x, y) -> float:
-    """Due to wind direction sign convention (defined as where wind is coming from, NOT where it is going), wind velocity components must have sign inverted before passing into this function"""
-    return np.arctan2(x, y) * 180 / np.pi % 360
+def wind_dir_from_vec(x: float, y: float) -> np.float64:
+    """Calculate wind direction angle from wind direction vector
+    Wind direction angle is defined as clockwise degrees from North, which is directionally reversed and 90 degrees rotated from 'normal' angles.
+        
+    Note: if calculating direction from wind velocity components, the components must be multiplied by -1 before passing into this function.
+    This is due to wind direction sign convention (defined as where wind is coming from, NOT where it is going)
+
+    Parameters
+    ----------
+    x : float
+        x vector component
+    y : float
+        y vector component
+
+    Returns
+    -------
+    np.float64
+        angle in interval [0, 360) or nan, if given input (0,0)
+    """
+    # fix edge case of (0,0)
+    x_is_zero = np.abs(x) < 1e-12
+    y_is_zero = np.abs(y) < 1e-12
+    if x_is_zero & y_is_zero:
+        return np.nan
+
+    angle = np.arctan2(y, x)  # not a mistake; function signature is (y, x)
+    angle *= 180 / np.pi * -1  # convert counterclockwise radians to clockwise degrees
+    angle += 90  # rotate reference axis from (x=1, y=0) to North (x=0, y=1)
+    angle = np.round(angle, 12) % 360  # convert interval from (-180, 180] to [0, 360)
+    # I have to round before mod 360 because negative epsilon % 360 -> 360, which violates my desired bounds.
+    # It's confusing, but trust the tests! See tests/data/test_process_matlab.py
+
+    return angle
+
+
+def mean_vec_from_dirs(direction: pd.Series) -> Tuple[float, float]:
+    """Component-wise mean of wind direction"""
+    dir_radians = direction * (np.pi / 180)
+    # y corresponds to cosine because wind_direction is defined as clockwise degrees from North (x=0, y=1)
+    # It's confusing, but trust the tests! See tests/data/test_process_matlab.py
+    y = np.cos(dir_radians)
+    x = np.sin(dir_radians)
+    return (x.mean(), y.mean())
 
 
 def direction_mean(direction: pd.Series,) -> float:
-    x = np.cos(direction)
-    y = np.sin(direction)
-    mean_vector = (x.mean(), y.mean())
-    return dir_from_vec(*mean_vector) # don't need to invert components because they are derived from wind direction (already inverted)
+    """Calculate mean of wind direction angle by projecting component-wise mean
+
+    Parameters
+    ----------
+    direction : pd.Series
+        series of wind directions in [0, 360)
+
+    Returns
+    -------
+    float
+        mean direction, in [0, 360)
+    """
+    mean_vector = mean_vec_from_dirs(direction)
+    return wind_dir_from_vec(*mean_vector)
 
 
 def sonic_summary(
@@ -255,7 +307,7 @@ def sonic_summary(
     )
     out.update(dict(zip(vert_square_labels, cum_sd)))
 
-    out["dir_mean"] = direction_mean(df[direction])
+    out["dir_mean"] = direction_mean(df[direction])  # type: ignore
     out["waked_frac"] = (
         df[[direction]].query(f"80 < {direction} < 210").count()[0] / 12000
     )
