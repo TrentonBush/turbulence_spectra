@@ -198,13 +198,13 @@ def min_max(column: pd.Series) -> tuple:
 def three_second_gust(column: pd.Series, sample_freq: float) -> float:
     """a commonly available metric used to assess structural strength requirements"""
     window_size = 3 * sample_freq
-    return column.rolling(window_size).mean().max()[0]
+    return column.rolling(window_size).mean().max()
 
 
 def wind_dir_from_vec(x: float, y: float) -> np.float64:
     """Calculate wind direction angle from wind direction vector
     Wind direction angle is defined as clockwise degrees from North, which is directionally reversed and 90 degrees rotated from 'normal' angles.
-        
+
     Note: if calculating direction from wind velocity components, the components must be multiplied by -1 before passing into this function.
     This is due to wind direction sign convention (defined as where wind is coming from, NOT where it is going)
 
@@ -311,8 +311,8 @@ def sonic_summary(
     out["waked_frac"] = (
         df[[direction]].query(f"80 < {direction} < 210").count()[0] / 12000
     )
-    out["min"], out["max"] = min_max(horizontal)
-    out["3s_gust"] = three_second_gust(horizontal, SONIC_SAMPLE_FREQ)  # type: ignore
+    out["min"], out["max"] = min_max(df[horizontal])
+    out["3s_gust"] = three_second_gust(df[horizontal], SONIC_SAMPLE_FREQ)  # type: ignore
 
     return out
 
