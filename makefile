@@ -4,5 +4,5 @@ check_integrity:
 	python ./src/data/integrity_check.py ./data/raw/
 	# TODO: make script to run integrity_check on newly re-downloaded files
 	# I did this manually by globbing "*.corrupt", replacing with .mat, and running on that subset
-process_matlab:
+aggregate:
 	python ./src/data/make_dataset.py ./data/raw/ ./data/processed/
