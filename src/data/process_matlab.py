@@ -9,7 +9,7 @@ import src.data.aggregate as aggregate
 SONIC_SAMPLE_FREQ = 20
 CUP_SAMPLE_FREQ = 1
 EXPECTED_UTC_OFFSET = -7
-STANDARD_SUBSET = (
+SONIC_SUBSET = (
     "Air_Temp_38m",
     "DeltaT_122_87m",
     "DeltaT_87_38m",
@@ -47,7 +47,7 @@ STANDARD_SUBSET = (
 
 
 def matlab_to_pandas(
-    filepath: Path, timestamps=False, col_subset: Optional[Sequence] = STANDARD_SUBSET
+    filepath: Path, timestamps=False, col_subset: Optional[Sequence] = SONIC_SUBSET
 ) -> pd.DataFrame:
     exclusions = {
         "__header__",
@@ -75,8 +75,8 @@ def matlab_to_pandas(
     else:
         for key in col_subset:
             df[key] = matlab[key]["val"].item()
-            if 'time_UTC' not in col_subset:
-                df['time_UTC'] = matlab['time_UTC']["val"].item()
+        if 'time_UTC' not in col_subset:
+            df['time_UTC'] = matlab['time_UTC']["val"].item()
 
     # Convert times from matlab to pandas
     # Matlab format is "days since 0 AD"
