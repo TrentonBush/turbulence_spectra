@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from scipy.io import loadmat
 from typing import Tuple, Optional, Sequence
@@ -44,10 +45,26 @@ SONIC_SUBSET = (
     "Sonic_direction_15m",
     "Sonic_z_clean_15m",
 )
+CUP_SUBSET = (
+    "time_UTC",
+    "Air_Temp_87m",
+    "DeltaT_122_87m",
+    "Dewpt_Temp_122m",
+    "Dewpt_Temp_87m",
+    "PRECIP_INTEN",
+    "Cup_WS_C1_130m",
+    "Cup_WS_122m",
+    "Cup_WS_C1_105m",
+    "Vane_WD_122m",
+    "Vane_WD_87m",
+)
 
 
 def matlab_to_pandas(
-    filepath: Path, timestamps=False, col_subset: Optional[Sequence] = SONIC_SUBSET
+    filepath: Path,
+    timestamps: bool = False,
+    col_subset: Optional[Sequence] = SONIC_SUBSET,
+    drop_raw_time: bool = True,
 ) -> pd.DataFrame:
     exclusions = {
         "__header__",
@@ -56,6 +73,10 @@ def matlab_to_pandas(
         "tower",
         "datastream",
     }
+    if col_subset == CUP_SUBSET:
+        stride = 20  # correct for oversampling 1Hz data at 20Hz
+    else:
+        stride = 1
     filepath = Path(filepath)
     matlab = loadmat(filepath, squeeze_me=True)
 
@@ -67,16 +88,16 @@ def matlab_to_pandas(
     if utc_offset != EXPECTED_UTC_OFFSET:
         raise ValueError(f"Unexpected utc_offset: {utc_offset}.")
 
-    df = pd.DataFrame()
     if col_subset is None:  # get all 150 cols
-        for key in matlab.keys():
-            if key not in exclusions:
-                df[key] = matlab[key]["val"].item()
-    else:
-        for key in col_subset:
-            df[key] = matlab[key]["val"].item()
-        if 'time_UTC' not in col_subset:
-            df['time_UTC'] = matlab['time_UTC']["val"].item()
+        col_subset = [key for key in matlab.keys() if key not in exclusions]
+
+    data = {
+        key : matlab[key]["val"].item()[::stride].astype(np.float32)
+        for key in col_subset
+        if key != "time_UTC"  # time needs 64 bit precision
+    }
+    data["time_UTC"] = matlab["time_UTC"]["val"].item()[::stride]
+    df = pd.DataFrame(data)
 
     # Convert times from matlab to pandas
     # Matlab format is "days since 0 AD"
@@ -90,14 +111,13 @@ def matlab_to_pandas(
             df["time_UTC"] - offset.n, unit="d"
         ) + pd.Timedelta(utc_offset, unit="h")
         # round to meaningful precision, in units of miliseconds
-        df["timestamp"] = df["timestamp"].round(str(int(1000 / sample_freq)) + "ms")
+        df["timestamp"] = df["timestamp"].dt.round(str(int(1000 / sample_freq)) + "ms")
         first_timestamp = df["timestamp"][0]
     else:
         first_timestamp = pd.to_datetime(
             df["time_UTC"][0] - offset.n, unit="d"
         ) + pd.Timedelta(utc_offset, unit="h")
         first_timestamp = first_timestamp.round(str(int(1000 / sample_freq)) + "ms")
-        df = df.drop(columns=['time_UTC'])
 
     # check date consistency
     file_date = pd.to_datetime(filepath.name[:16], format="%m_%d_%Y_%H_%M")
@@ -106,7 +126,10 @@ def matlab_to_pandas(
             f"Timestamp mismatch. Filename {filepath.name} implies {file_date}, but first timestamp is {first_timestamp}"
         )
 
-    return df
+    if drop_raw_time:
+        return df.drop(columns=["time_UTC"])
+    else:
+        return df
 
 
 def sonic_summary(

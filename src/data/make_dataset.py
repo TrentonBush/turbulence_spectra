@@ -23,9 +23,10 @@ CUP_NAMES = (
     "Cup_WS_10m",
     "Cup_WS_3m",
 )
+DEFAULT_LOG_PATH = Path("./data/processed/process.log")
 
 
-def create_logger():
+def create_logger(dest=None):
     """helper func to set up loggers within multiprocessing functions
 
     Returns
@@ -33,12 +34,14 @@ def create_logger():
     logging.Logger
         logger
     """
+    if dest is None:
+        dest = DEFAULT_LOG_PATH
     logger = multiprocessing.get_logger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter(
         "[%(asctime)s| %(levelname)s| %(processName)s] %(message)s"
     )
-    handler = logging.FileHandler(Path("./data/processed/process.log"))
+    handler = logging.FileHandler(dest)
     handler.setFormatter(formatter)
 
     # prevents duplicated messages
@@ -68,9 +71,9 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
         matlab_df = pmat.matlab_to_pandas(filepath)
     except (OSError, MatReadError, ValueError):
         message = f"Skipped {filepath.name} due to load error"
-        tqdm.write(message + '. See log for details')
+        tqdm.write(message + ". See log for details")
         logger.exception(message)
-        return tuple([pd.DataFrame()] * 3)  # empty
+        return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame())  # empty
     sonics = []
     cups = []
     try:
@@ -82,9 +85,9 @@ def summarize_file(filepath: Path,) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Data
             cups.append(pd.DataFrame(pmat.cup_summary(matlab_df, cup), index=[0]))
     except ValueError:
         message = f"Skipped {filepath.name} due to processing error"
-        tqdm.write(message + '. See log for details')
+        tqdm.write(message + ". See log for details")
         logger.exception(message)
-        return tuple([pd.DataFrame()] * 3)  # empty
+        return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame())  # empty
 
     sonics = pd.concat(sonics, ignore_index=True)
     sonics["timestamp"] = timestamp  # type: ignore
