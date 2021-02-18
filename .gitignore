@@ -88,3 +88,6 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
+# file for testing, don't want to pollute repo
+scratchpad.py
