@@ -1,10 +1,8 @@
-from sklearn.model_selection import BaseShuffleSplit
-from sklearn.utils.validation import (
-    _num_samples,
-    _deprecate_positional_args,
-    _validate_shuffle_split,
-    check_random_state,
-)
+# unstable import
+from sklearn.model_selection._split import BaseShuffleSplit, _validate_shuffle_split
+
+from sklearn.utils.validation import _num_samples
+from sklearn.utils import check_random_state
 import numpy as np
 
 
@@ -19,12 +17,6 @@ class BufferedBlockedSplit(BaseShuffleSplit):
     by 'buffering' (excluding) data within a radius of the boundary values.
     But buffering costs data. To reduce data loss, the number of boundary points
     is reduced by 'blocking' test points together.
-
-    Notes
-    ----------
-    Buffered data is taken from the test set, so set test_size and n_blocks accordingly.
-    This is designed for data with one sequential dimension only, eg time series.
-    Assumes data is already sorted in the sequential dimension.
 
     Parameters
     ----------
@@ -51,9 +43,14 @@ class BufferedBlockedSplit(BaseShuffleSplit):
     random_state : int, RandomState instance or None, default=None
         Controls the randomness of the training and testing indices produced.
         Pass an int for reproducible output across multiple function calls.
+
+    Notes
+    ----------
+    Buffered data is taken from the test set, so set test_size and n_blocks accordingly.
+    This is designed for data with one sequential dimension only, eg time series.
+    Assumes data is already sorted in the sequential dimension.
     """
 
-    @_deprecate_positional_args
     def __init__(
         self,
         n_splits=10,
@@ -80,25 +77,25 @@ class BufferedBlockedSplit(BaseShuffleSplit):
         self._width = buffer_width
         self._n_blocks = n_blocks
 
-    def _iter_indices(self, X, y=None, groups=None):
-        """y and groups are ignored; included for compatibility with base class"""
-
-        n_samples = _num_samples(X)
-        block_size = n_samples // self._n_blocks  # extra points go in last block
-        n_train, n_test = _validate_shuffle_split(
+        self._n_train, self._n_test = _validate_shuffle_split(
             self._n_blocks,
             self.test_size,
             self.train_size,
             default_test_size=self._default_test_size,
         )
 
+    def _iter_indices(self, X, y=None, groups=None):
+        """y and groups are ignored; included for compatibility with base class"""
+        n_samples = _num_samples(X)
+        block_size = n_samples // self._n_blocks  # extra points go in last block
+
         rng = check_random_state(self.random_state)
 
         for i in range(self.n_splits):
             # choose random blocks
             permutation = rng.permutation(self._n_blocks)
-            test_blocks = permutation[:n_test]
-            train_blocks = permutation[n_test : (n_test + n_train)]
+            test_blocks = permutation[: self._n_test]
+            train_blocks = permutation[self._n_test : (self._n_test + self._n_train)]
 
             test_indicies = self._index_from_blocks(
                 test_blocks, block_size, n_samples, test_set=True
@@ -107,13 +104,32 @@ class BufferedBlockedSplit(BaseShuffleSplit):
             yield train_indices, test_indicies
 
     def _index_from_blocks(self, blocks, block_size, n_samples, test_set=False):
-        """convert block numbers to their corresponding indices.
+        """Convert block numbers to their corresponding indices.
+        Parameters
+        ----------
+        blocks : array-like
+            the block indices for the selected set
+        block_size : int
+            The size, in points, of each block (except the last block, which can be longer)
+        n_samples : int
+            The size of the array you want to construct an index for: your input data.
+        test_set : bool
+            Indicate whether the index will be for a test set, which applies buffering, or train set, which does not.
 
-        Example: 102 data points are blocked into 10 blocks. Blocks 2 and 9 are chosen for the test set. Buffer width = 0.
-        The indices returned by this method are: np.array([20, 21, ... , 29, 90, 91, ... , 99, 100, 101]).
-        Note that the last block contains extra points equal to n_samples modulo n_blocks.
-        A buffer of width=1 would remove points 20, 29, and 90."""
+        Returns
+        ------
+        merged_block_indices : ndarray
+            The indices for the desired split.
+
+        Example: 16 data points are blocked into 5 blocks (sizes 3, 3, 3, 3, 4), numbered 0 to 4. Blocks 2 and 4 are chosen for the train set.
+        The indices returned by this method are: np.array([6, 7, 8, 12, 13, 14, 15]).
+        Note that the last block is larger than any other; it contains extra points equal to n_samples modulo n_blocks.
+        If this example was repeated for a test set with buffer_width=1, points 6, 8, and 12 would be removed because they border the train set."""
         buffer_width = self._width if test_set else 0
+        if block_size <= buffer_width * 2:
+            raise ValueError(
+                f"Buffer_width is larger than half a block - no data will be left!\nbuffer_width: {buffer_width}\nblock_size: {block_size}"
+            )
 
         blocks = np.sort(blocks)
         boundary_indices = []
@@ -125,6 +141,7 @@ class BufferedBlockedSplit(BaseShuffleSplit):
 
         # non start/end boundaries
         for i, block_num in enumerate(blocks[1:]):
+            i += 1  # want index number of blocks[:], not blocks[1:]
             previous = blocks[i - 1]
             if block_num - previous == 1:  # adjacent, no boundary
                 continue
@@ -135,7 +152,7 @@ class BufferedBlockedSplit(BaseShuffleSplit):
                 boundary_indices.append(block_num * block_size + buffer_width)
 
         if blocks[-1] == (self._n_blocks - 1):  # end of dataset needs no buffering
-            boundary_indices.append(n_samples - 1)
+            boundary_indices.append(n_samples)
         else:
             boundary_indices.append((blocks[-1] + 1) * block_size - buffer_width)
 
@@ -143,7 +160,8 @@ class BufferedBlockedSplit(BaseShuffleSplit):
             np.arange(start, end)
             for start, end in zip(boundary_indices[::2], boundary_indices[1::2])
         ]
-        return np.concatenate(merged_block_indices)
+        merged_block_indices = np.concatenate(merged_block_indices)
+        return merged_block_indices
 
     def split(self, X, y=None, groups=None):
         """Generate indices to split data into training and test set.
