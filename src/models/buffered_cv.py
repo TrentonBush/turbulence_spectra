@@ -7,10 +7,11 @@ import numpy as np
 
 
 class BufferedBlockedSplit(BaseShuffleSplit):
-    """Similar to GroupShuffleSplit, but mitigates data leakage from autocorrelation.
+    """Similar to GroupShuffleSplit, but uses buffering to mitigate
+    data leakage from autocorrelation.
 
     Provides randomized train/test indices to split data into
-    permutations of sequential blocks.
+    permutations of 'blocks' of sequential data.
 
     Autocorrelation causes information to leak into neighboring points, which erodes
     the boundaries between train and test sets. One way to mitigate this is
@@ -97,11 +98,11 @@ class BufferedBlockedSplit(BaseShuffleSplit):
             test_blocks = permutation[: self._n_test]
             train_blocks = permutation[self._n_test : (self._n_test + self._n_train)]
 
-            test_indicies = self._index_from_blocks(
+            test_indices = self._index_from_blocks(
                 test_blocks, block_size, n_samples, test_set=True
             )
             train_indices = self._index_from_blocks(train_blocks, block_size, n_samples)
-            yield train_indices, test_indicies
+            yield train_indices, test_indices
 
     def _index_from_blocks(self, blocks, block_size, n_samples, test_set=False):
         """Convert block numbers to their corresponding indices.
