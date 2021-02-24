@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def angular_difference(series1: pd.Series, series2: pd.Series) -> pd.Series:
+def angular_difference(series1, series2):
     """Take two angular vectors (in degrees), each in [0, 360), and express their difference in (-180, 180]
     output = series1 - series2
 
@@ -17,7 +17,7 @@ def angular_difference(series1: pd.Series, series2: pd.Series) -> pd.Series:
     pd.Series
         differences, in (-180, 180]
     """
-    return ((series1.to_numpy() - series2.to_numpy()) - 180) % -360 + 180
+    return ((series1 - series2) - 180) % -360 + 180
 
 def power_law_shear(upper_speed: pd.Series, lower_speed: pd.Series, upper_height: float, lower_height: float) -> pd.Series:
     """Take two wind speed vectors and calculate the power law exponent. Length units must be compatible - either all meters and m/s or feet and ft/s
