@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import pytest
 
-import src.data.process_matlab as pm
+import src.data.aggregate as agg
 
 
 def test_wind_dir_from_vec():
@@ -10,7 +10,7 @@ def test_wind_dir_from_vec():
     # 0 degrees defined as North, so (x=0, y=1)
     points = ((0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1))
     expected = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
-    actual = [pm.wind_dir_from_vec(*point) for point in points]
+    actual = [agg.wind_dir_from_vec(*point) for point in points]
     message = (
         f"Tested 8 points around unit square. Expected: {expected}\nActual: {actual}"
     )
@@ -28,7 +28,7 @@ def test_direction_mean():
     }
 
     for k, v in test_data.items():
-        actual = [pm.direction_mean(pd.Series(pair)) for pair in v["pairs"]]
+        actual = [agg.direction_mean(pd.Series(pair)) for pair in v["pairs"]]
         expected = v["expected"]
         message = (
             f"{k} test pairs: {v['pairs']} \nExpected: {expected}\nActual: {actual}"
