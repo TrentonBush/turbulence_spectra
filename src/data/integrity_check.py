@@ -87,7 +87,7 @@ async def main(
     corrupt_files = corrupt_file_filter_multiprocess(files)
 
     if corrupt_files:
-        urls = list(map(downloader.url_from_filename, corrupt_files))
+        urls = list(map(downloader._url_from_filename, corrupt_files))
         for path in corrupt_files:
             path.replace(path.with_suffix(".corrupt"))
         await downloader.download_many(

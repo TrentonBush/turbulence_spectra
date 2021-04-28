@@ -1,7 +1,8 @@
+"""CLI to download 20 Hz data from NREL NWTC mast 5"""
+import asyncio
 import httpx
 import aiometer
 import aiofiles
-import asyncio
 from pathlib import Path
 from functools import partial, wraps
 import pandas as pd
@@ -14,10 +15,19 @@ from httpcore import ReadTimeout
 BASE_URL = "https://wind.nrel.gov/MetData/135mData/M5Twr/20Hz/mat/"
 
 
-def dense_samples(
+def _dense_samples(
     *, start_timestamp: str, end_timestamp: str, files_to_skip: Optional[set] = None,
 ) -> List[Tuple[str, str]]:
-    """Generate a complete list of data URLs between start_timestamp and end_timestamp, inclusive.
+    """Create URL parts (date string and filename) between start_timestamp and end_timestamp, inclusive.
+    URL format is BASE_URL/date_string/filename.mat
+
+    Example:
+    >>> _dense_samples(start_timestamp='2019-04-17 03:50', end_timestamp='2019-04-17 04:10')
+    [
+        ("2019/04/17/", "04_17_2019_03_50_00_000.mat"),
+        ("2019/04/17/", "04_17_2019_04_00_00_000.mat"),
+        ("2019/04/17/", "04_17_2019_04_10_00_000.mat")
+    ]
 
     Parameters
     ----------
@@ -43,14 +53,18 @@ def dense_samples(
     if files_to_skip is not None:
         filter_ = ~samples["filenames"].isin(files_to_skip)
         logging.info(
-            f"downloader.dense_samples skipped {filter_.size - filter_.sum()} preexisting files"
+            f"downloader._dense_samples skipped {filter_.size - filter_.sum()} preexisting files"
         )
         samples = samples[filter_]  # exclude preexisting
     return list(samples[["urls", "filenames"]].itertuples(index=False, name=None))
 
 
-def url_from_filename(file: Path) -> Tuple[str, str]:
+def _url_from_filename(file: Path) -> Tuple[str, str]:
     """Generate url parts from input NREL-format.mat filename
+
+    Example:
+    >>> _url_from_filename(Path("./04_17_2019_03_50_00_000.mat"))
+    ("2019/04/17/", "04_17_2019_03_50_00_000.mat")
 
     Parameters
     ----------
@@ -81,7 +95,7 @@ async def download_file(
         destination directory
     url_parts : Tuple[str, str]
         tuple of (date_url, filename.mat), like ("2019/04/17/", "04_17_2019_03_50_00_000.mat")
-        Use dense_samples() to produce a series of them.
+        Use _dense_samples() to produce a series of them.
     """
     url = "".join([BASE_URL, *url_parts])
     filepath = out_dir / url_parts[1]
@@ -115,7 +129,7 @@ async def download_many(
     Parameters
     ----------
     urls : Sequence[Tuple[str, str]]
-        url parts as created by dense_samples() or similar
+        url parts as created by _dense_samples() or similar
     output_directory : Path
         destination directory
     max_concurrent : int, optional
@@ -126,7 +140,6 @@ async def download_many(
     directory = Path(output_directory)
     count = len(urls)
     message = f"Starting Download of {count} files"
-    print(message)
     logging.info(message)
     start = pd.Timestamp("now")
 
@@ -147,9 +160,7 @@ async def download_many(
             f"Seconds per URL: {(time / count).total_seconds():.2f}",
         ]
     )
-
     logging.info(message)
-    print(message)
 
 
 def coro(func):
@@ -179,7 +190,7 @@ async def main(
     end_timestamp : str
         last timestamp of interval, inclusive
     output_directory : Path
-        destination directory, possibly with pre-existing .mat files (will be skipped)
+        destination directory. Any pre-existing .mat files will be skipped
     max_concurrent : int, optional
         maximum simultaneous connections, by default 5
     max_per_second : float, optional
@@ -190,7 +201,7 @@ async def main(
     if not files_to_skip:
         files_to_skip = None  # type: ignore
 
-    urls = dense_samples(
+    urls = _dense_samples(
         start_timestamp=start_timestamp,
         end_timestamp=end_timestamp,
         files_to_skip=files_to_skip,
