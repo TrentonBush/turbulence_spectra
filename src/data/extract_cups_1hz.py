@@ -1,4 +1,4 @@
-"""script to extract the cup anemometer subset of 1Hz data from the full 20Hz archive"""
+"""CLI script to extract the cup anemometer subset of 1Hz data from the full 20Hz archive"""
 
 from pathlib import Path
 from typing import Optional, Sequence

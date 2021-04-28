@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""CLI to process matlab files into tabular parquet aggregates"""
 from pathlib import Path
 from typing import Optional, Tuple, Sequence, Dict
 import pandas as pd
@@ -141,7 +141,8 @@ def summarize_many_multiprocess(
 
 
 def main(source_dir: str, out_dir: str) -> None:
-    """summarize all .mat files in source_dir and write results as three .parquet files, one each for sonics, cups, and misc, to out_dir
+    """summarize all .mat files in source_dir and write results as three .parquet files,
+    one each for sonics, cups, and misc, to out_dir
 
     Parameters
     ----------

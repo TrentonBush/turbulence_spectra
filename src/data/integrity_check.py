@@ -1,3 +1,4 @@
+"""CLI script to verify integrity of matlab files and re-download corrupt files"""
 from pathlib import Path
 from scipy.io import loadmat
 from scipy.io.matlab.miobase import MatReadError

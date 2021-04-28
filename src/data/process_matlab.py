@@ -1,8 +1,9 @@
+"""module to extract and aggregate high frequency data to low frequency metrics"""
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from scipy.io import loadmat
-from typing import Tuple, Optional, Sequence
+from typing import Tuple, Optional, Sequence, Dict, Union
 
 import src.data.aggregate as aggregate
 
@@ -66,6 +67,22 @@ def matlab_to_pandas(
     col_subset: Optional[Sequence] = SONIC_SUBSET,
     drop_raw_time: bool = True,
 ) -> pd.DataFrame:
+    """read an NREL NWTC matlab file and load the data into a pandas dataframe
+
+    Args:
+        filepath (Path): path to file
+        timestamps (bool, optional): if True, read timestamp column and set as dataframe index. Defaults to False.
+        col_subset (Optional[Sequence], optional): optionally load only a subset of column names. Defaults to SONIC_SUBSET.
+        drop_raw_time (bool, optional): if True, drop the raw matlab time column, which is a float indicating 'days since 0 AD'. Defaults to True.
+
+    Raises:
+        ValueError: if the sample frequency stored in the matlab file does not match the expected value SONIC_SAMPLE_FREQ
+        ValueError: if the UTC offset stored in the matlab file does not match the expected value EXPECTED_UTC_OFFSET
+        ValueError: if the timestamp encoded in the filename does not match the first timestamp of the actual data
+
+    Returns:
+        pd.DataFrame: dataframe of high frequency data
+    """
     exclusions = {
         "__header__",
         "__version__",
@@ -73,7 +90,7 @@ def matlab_to_pandas(
         "tower",
         "datastream",
     }
-    if col_subset == CUP_SUBSET:
+    if col_subset is CUP_SUBSET:
         stride = 20  # correct for oversampling 1Hz data at 20Hz
     else:
         stride = 1
@@ -134,8 +151,18 @@ def matlab_to_pandas(
 
 def sonic_summary(
     df: pd.DataFrame, height: int, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
-):
-    out = {}
+) -> Dict[str, Union[float, int]]:
+    """downsample high frequency sonic anemometer data by aggregating to industry standard metrics
+
+    Args:
+        df (pd.DataFrame): dataframe of sonic data, as loaded from matlab_to_pandas()
+        height (int): height of anemometer, in meters
+        eval_periods (Tuple[float, ...], optional): periods at which to evaluate the cumulative integral of power spectral density, in seconds. Defaults to (60, 30, 10, 2).
+
+    Returns:
+        Dict[str, Union[float, int]]: aggregate metrics
+    """
+    out: Dict[str, Union[float, int]] = {}
     out["height"] = height
     horizontal = f"Sonic_CupEqHorizSpeed_{height}m"
     vertical = f"Sonic_z_clean_{height}m"
@@ -188,8 +215,18 @@ def sonic_summary(
 
 def cup_summary(
     df: pd.DataFrame, inst: str, eval_periods: Tuple[float, ...] = (60, 30, 10, 2)
-):
-    out = {}
+) -> Dict[str, Union[float, int]]:
+    """downsample high frequency cup anemometer data by aggregating to industry standard metrics
+
+    Args:
+        df (pd.DataFrame): dataframe of meteorological data, as loaded from matlab_to_pandas()
+        inst (str): cup anemometer name
+        eval_periods (Tuple[float, ...], optional): periods at which to evaluate the cumulative integral of power spectral density, in seconds. Defaults to (60, 30, 10, 2).
+
+    Returns:
+        Dict[str, Union[float, int]]: aggregate metrics
+    """
+    out: Dict[str, Union[float, int]] = {}
     out["height"] = int(inst.split("_")[-1][:-1])  # names end with _123m
     sample_ratio = int(
         SONIC_SAMPLE_FREQ / CUP_SAMPLE_FREQ
@@ -226,7 +263,15 @@ def cup_summary(
     return out
 
 
-def misc_summary(df: pd.DataFrame):
+def misc_summary(df: pd.DataFrame) -> Dict[str, Union[float, int]]:
+    """downsample high frequency meteorological data by aggregating to industry standard metrics
+
+    Args:
+        df (pd.DataFrame): dataframe of sonic data, as loaded from matlab_to_pandas()
+
+    Returns:
+        Dict[str, Union[float, int]]: aggregate metrics
+    """
     out = {}
     out["mean_temp_38"] = df["Air_Temp_38m"].mean()
     out["mean_temp_122"] = (
